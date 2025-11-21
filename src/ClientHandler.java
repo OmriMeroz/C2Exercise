@@ -14,6 +14,9 @@ public class ClientHandler implements Runnable {
     private final PrintWriter out;
     private final BufferedReader in;
 
+    private final VigenereCipher cipher = new VigenereCipher("secretkey");
+
+
     public ClientHandler(Socket clientSocket, int id) {
         this.clientSocket = clientSocket;
         this.id = id;
@@ -36,7 +39,7 @@ public class ClientHandler implements Runnable {
             System.out.println("Client " + id + " is not reachable");
             return;
         }
-        out.println(command);
+        out.println(cipher.encrypt(command));
     }
 
     public void kill() {
@@ -51,12 +54,13 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
         try {
-            String message;
+            String encryptdMessage;
 
-            while ((message = in.readLine()) != null) {
-                if (message.isEmpty()) {
+            while ((encryptdMessage = in.readLine()) != null) {
+                if (encryptdMessage.isEmpty()) {
                     continue;
                 }
+                String message = cipher.decrypt(encryptdMessage);
                 System.out.println("Response from client " + id + ": " + message);
             }
 
