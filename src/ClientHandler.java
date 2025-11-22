@@ -10,6 +10,7 @@ public class ClientHandler implements Runnable {
     private final Socket clientSocket;
     private final int id;
     private volatile boolean isAlive;
+    private volatile long lastHeartbeatTime;
 
     private final PrintWriter out;
     private final BufferedReader in;
@@ -21,6 +22,7 @@ public class ClientHandler implements Runnable {
         this.clientSocket = clientSocket;
         this.id = id;
         this.isAlive = true;
+        this.lastHeartbeatTime = System.currentTimeMillis();
 
         try {
             this.out = new PrintWriter(clientSocket.getOutputStream(), true);
@@ -30,10 +32,14 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    public int getId() {
+        return this.id;
+    }
+
     public boolean isAlive() {
         return isAlive && !clientSocket.isClosed();
     }
-
+    //asynchronously - send command just send and not waiting for response
     public void sendCommand(String command) {
         if (!isAlive()) {
             System.out.println("Client " + id + " is not reachable");
@@ -51,6 +57,14 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    public void updateHeartbeat() {
+        this.lastHeartbeatTime = System.currentTimeMillis();
+    }
+
+    public long getLastHeartbeatTime() {
+        return lastHeartbeatTime;
+    }
+
     @Override
     public void run() {
         try {
@@ -61,6 +75,10 @@ public class ClientHandler implements Runnable {
                     continue;
                 }
                 String message = cipher.decrypt(encryptdMessage);
+                if (message.equals("HEARTBEAT")) {
+                    updateHeartbeat();
+                    //continue; //optional for not printing heartbeat repeatedly
+                }
                 System.out.println("Response from client " + id + ": " + message);
             }
 
@@ -68,7 +86,7 @@ public class ClientHandler implements Runnable {
             if (!isAlive) {
                 System.out.println("Client " + id + " killed");
             } else {
-                System.out.println("Client " + id + " disconnected: " + e.getMessage());
+                System.out.println("Client " + id + " disconnected");
             }
         } catch (Exception e) {
             e.printStackTrace();
