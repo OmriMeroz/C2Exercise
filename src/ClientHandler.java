@@ -5,6 +5,20 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.SocketException;
 
+/**
+ * Handles the connection and communication with a single client.
+ *
+ * This class runs on its own thread and is responsible for:
+ * - Reading encrypted messages coming from the client
+ * - Decrypting heartbeat messages and command outputs
+ * - Sending encrypted commands from the server to the client
+ * - Tracking whether the client is still alive using heartbeat timestamps
+ * - Closing the connection and cleaning up when the client disconnects or is
+ * killed
+ *
+ * Each connected client has exactly one ClientHandler instance.
+ */
+
 public class ClientHandler implements Runnable {
 
     private final Socket clientSocket;
@@ -17,7 +31,7 @@ public class ClientHandler implements Runnable {
 
     private final VigenereCipher cipher = new VigenereCipher("secretkey");
 
-
+    // Constructor: sets up I/O streams and initial state.
     public ClientHandler(Socket clientSocket, int id) {
         this.clientSocket = clientSocket;
         this.id = id;
@@ -32,14 +46,13 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    public int getId() {
-        return this.id;
-    }
-
+    // Returns true if socket is still open and the client hasn't been marked dead.
     public boolean isAlive() {
         return isAlive && !clientSocket.isClosed();
     }
-    //asynchronously - send command just send and not waiting for response
+
+    // Sends an encrypted command to the client not waiting for response -
+    // non-blocking).
     public void sendCommand(String command) {
         if (!isAlive()) {
             System.out.println("Client " + id + " is not reachable");
@@ -48,6 +61,7 @@ public class ClientHandler implements Runnable {
         out.println(cipher.encrypt(command));
     }
 
+    // Forces the client connection to close and marks it as dead.
     public void kill() {
         try {
             isAlive = false;
@@ -57,6 +71,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    // Called when a heartbeat is received to update the timestamp.
     public void updateHeartbeat() {
         this.lastHeartbeatTime = System.currentTimeMillis();
     }
@@ -65,7 +80,16 @@ public class ClientHandler implements Runnable {
         return lastHeartbeatTime;
     }
 
-    @Override
+    /**
+     * Main loop of the handler:
+     * - Reads encrypted messages from the client
+     * - Decrypts them
+     * - Detects heartbeat messages
+     * - Prints command results sent by the client
+     *
+     * When the client disconnects or the socket closes, the handler removes itself
+     * from the server’s clients list.
+     */
     public void run() {
         try {
             String encryptdMessage;
@@ -75,9 +99,9 @@ public class ClientHandler implements Runnable {
                     continue;
                 }
                 String message = cipher.decrypt(encryptdMessage);
-                if (message.equals("HEARTBEAT")) {
+                if (message.equals("heartbeat")) {
                     updateHeartbeat();
-                    //continue; //optional for not printing heartbeat repeatedly
+                    continue; // optional for not printing heartbeat repeatedly
                 }
                 System.out.println("Response from client " + id + ": " + message);
             }
@@ -102,7 +126,10 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    @Override
+    public int getId() {
+        return this.id;
+    }
+
     public String toString() {
         return "client ID = " + this.id + " Status = " + (this.isAlive ? "alive" : "dead");
     }
